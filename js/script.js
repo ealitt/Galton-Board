@@ -73,6 +73,7 @@ function guiSetup(pageHeight, pageWidth) {
     let ballData = gui.addFolder('Ball Settings');
     ballData.add(ballSettings, 'ballCount', 100, 5000, 10);    
     ballData.add(ballSettings, 'size', 1, 50, 1);
+    ballData.add(ballSettings, 'bounciness', 0.01, 1.5, 0.01);
     ballData.add(ballSettings, 'friction', 0.00001, 1, 0.00001);
     ballData.add(ballSettings, 'airFriction', 0.0001, 1, 0.0001);
     ballData.add(ballSettings, 'density', 0.001, 1, 0.001);
