@@ -2,6 +2,25 @@ var Physics = Physics || {};
 
 let color = '#ffffff';
 
+let environment,
+ballSettings,
+pegSettings,
+dividerSettings;
+
+let Engine = Matter.Engine,
+    Render = Matter.Render,
+    Runner = Matter.Runner,
+    Composite = Matter.Composite,
+    Composites = Matter.Composites,
+    Common = Matter.Common,
+    Events = Matter.Events,
+    MouseConstraint = Matter.MouseConstraint,
+    Mouse = Matter.Mouse,
+    World = Matter.World,
+    Bodies = Matter.Bodies,
+    Vector = Matter.Vector;
+
+
 class Environment {
     constructor(pageHeight, pageWidth) {
         this.height = pageHeight;
@@ -13,13 +32,14 @@ class Environment {
 
 class BallSettings {
     constructor() {
-        this.numBalls = 1000;
+        this.ballCount = 1000;
         this.size = 10;
         this.friction = 0.00001;
-        this.frictionAir = 0.001;
+        this.airFriction = 0.001;
         this.density = 0.01;
-        this.restitution = 0.4;
+        this.bounciness = 0.4;
         this.sleepThreshold = 35;
+        this.frequency = 50;
     }
 }
 
@@ -42,29 +62,29 @@ class DividerSettings {
     }
 }
 
-Physics.sandbox = function() {
-    let Engine = Matter.Engine,
-    Render = Matter.Render,
-    Runner = Matter.Runner,
-    Composite = Matter.Composite,
-    Composites = Matter.Composites,
-    Common = Matter.Common,
-    Events = Matter.Events,
-    MouseConstraint = Matter.MouseConstraint,
-    Mouse = Matter.Mouse,
-    World = Matter.World,
-    Bodies = Matter.Bodies,
-    Vector = Matter.Vector;
+function guiSetup(pageHeight, pageWidth) {
+    environment = new Environment(pageHeight, pageWidth);
+    ballSettings = new BallSettings();
+    pegSettings = new PegSettings();
+    dividerSettings = new DividerSettings(environment);
 
+    let gui = new dat.GUI();
+
+    let ballData = gui.addFolder('Ball Settings');
+    ballData.add(ballSettings, 'ballCount', 100, 5000, 10);    
+    ballData.add(ballSettings, 'size', 1, 50, 1);
+    ballData.add(ballSettings, 'friction', 0.00001, 1, 0.00001);
+    ballData.add(ballSettings, 'airFriction', 0.0001, 1, 0.0001);
+    ballData.add(ballSettings, 'density', 0.001, 1, 0.001);
+    ballData.add(ballSettings, 'sleepThreshold', 0, 100, 1);
+    ballData.add(ballSettings, 'frequency', 0, 500, 1);
+}
+
+Physics.sandbox = function() {
     let engine = Engine.create({
         enableSleeping: true
     }),
     world = engine.world;
-
-    let pageHeight = document.body.clientHeight*2,
-    pageWidth = document.body.clientWidth*2;
-    
-    let environment = new Environment(pageHeight, pageWidth);
 
     let render = Render.create({
         element: document.body,
@@ -81,26 +101,23 @@ Physics.sandbox = function() {
     let runner = Runner.create();
     Runner.run(runner, engine);
 
-    let ballSettings = new BallSettings();
+    let count = 0;
 
     setInterval(() => {
-        if(ballSettings.numBalls-- > 0){
+        if(count < ballSettings.ballCount){
             let ball = createBall(Bodies, environment, ballSettings);
             Matter.Events.on(ball, "sleepStart", () => { Matter.Body.setStatic(ball, true) });
             World.add(engine.world, ball);
-        } else {
-            console.log(Composite.allBodies(world));
+            count += 1;
         }
-    }, 50);
+    }, ballSettings.frequency);
 
     let floor = [createFloor(Bodies,environment)];
 
     let walls = [createWall(Bodies,environment.height,0,environment.centerY),createWall(Bodies,environment.height,environment.width,environment.centerY)];
 
-    let pegSettings = new PegSettings(),
     pegs = createPegs(Bodies,environment,pegSettings);
 
-    let dividerSettings = new DividerSettings(environment),
     dividers = createDividers(Bodies, environment, dividerSettings);
 
     World.add(world, floor);
@@ -112,9 +129,9 @@ Physics.sandbox = function() {
 function createBall(Bodies, environment, ballSettings){
     return ball = Bodies.circle(environment.centerX+(-0.5 + Math.random()),0,ballSettings.size, {
         friction: ballSettings.friction,
-        frictionAir: ballSettings.frictionAir,
+        frictionAir: ballSettings.airFriction,
         density: ballSettings.density,
-        restitution: ballSettings.restitution,
+        restitution: ballSettings.bounciness,
         sleepThreshold: ballSettings.sleepThreshold
     })
 }
@@ -198,6 +215,16 @@ function createDividers(Bodies, environment, dividerSettings) {
     return dividers
 }
 
+function resetWorld() {
+    World.clear(engine.world);
+    Engine.clear(engine);
+    runner = Engine.run(engine);
+}
+
 window.onload = function() {
+    let pageHeight = document.body.clientHeight*2,
+    pageWidth = document.body.clientWidth*2;
+
+    guiSetup(pageHeight, pageWidth);
     Physics.sandbox();
 }
