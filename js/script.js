@@ -2,6 +2,9 @@ var Physics = Physics || {};
 
 let color = '#ffffff';
 
+let timer,
+run = true;
+
 let environment,
 ballSettings,
 pegSettings,
@@ -20,6 +23,12 @@ let Engine = Matter.Engine,
     Bodies = Matter.Bodies,
     Vector = Matter.Vector;
 
+let render,
+runner,
+engine,
+world;
+
+
 
 class Environment {
     constructor(pageHeight, pageWidth) {
@@ -27,6 +36,27 @@ class Environment {
         this.width = pageWidth;
         this.centerX = this.width/2;
         this.centerY = this.height/2;
+        this.pause = () => {
+            if(run) {
+                Runner.stop(runner);
+                run = false;
+            } else {
+                Runner.start(runner, engine);
+                run = true;
+            }
+        }
+        this.clear = () => {
+            World.clear(world);
+            Engine.clear(engine);
+            Render.stop(render);
+            Runner.stop(runner);
+            render.canvas.remove();
+            render.canvas = null;
+            render.context = null;
+            render.textures = {};
+            clearInterval(timer);
+            Physics.sandbox();
+        };
     }
 }
 
@@ -45,20 +75,19 @@ class BallSettings {
 
 class PegSettings {
     constructor() {
-        this.shape = "polygon";
+        this.shape = "hexagon";
+        this.rows = 15;
         this.pegSize = 30;
         this.colSpacing = 200;
         this.rowSpacing = 70;
-        this.rows = 15;
     }
 }
 
 class DividerSettings {
-    constructor(environment) {
+    constructor() {
+        this.num = 20;
         this.wallHeight = 1200;
         this.wallWidth = 10;
-        this.num = 20;
-        this.spacing = environment.centerX/this.num*2;
     }
 }
 
@@ -75,19 +104,35 @@ function guiSetup(pageHeight, pageWidth) {
     ballData.add(ballSettings, 'size', 1, 50, 1);
     ballData.add(ballSettings, 'bounciness', 0.01, 1.5, 0.01);
     ballData.add(ballSettings, 'friction', 0.00001, 1, 0.00001);
-    ballData.add(ballSettings, 'airFriction', 0.0001, 1, 0.0001);
+    ballData.add(ballSettings, 'airFriction', 0.0001, 0.1, 0.0001);
     ballData.add(ballSettings, 'density', 0.001, 1, 0.001);
     ballData.add(ballSettings, 'sleepThreshold', 0, 100, 1);
     ballData.add(ballSettings, 'frequency', 0, 500, 1);
+    ballData.open();
+
+    let pegData = gui.addFolder('Peg Settings');
+    pegData.add(pegSettings, 'shape', ['circle', 'hexagon', 'triangle', 'square']);
+    pegData.add(pegSettings, 'pegSize', 1, 50, 1);
+    pegData.add(pegSettings, 'rows', 1, 15, 1);
+    pegData.add(pegSettings, 'colSpacing', 50, 400, 10);
+    pegData.add(pegSettings, 'rowSpacing', 10, 200, 10);
+
+    let dividerData = gui.addFolder('Divider Settings');
+    dividerData.add(dividerSettings, 'num', 1, 50, 1);
+    dividerData.add(dividerSettings, 'wallHeight', 100, 2000, 100);
+    dividerData.add(dividerSettings, 'wallWidth', 1, 50, 1);    
+
+    gui.add(environment, 'pause');
+    gui.add(environment, 'clear');
 }
 
 Physics.sandbox = function() {
-    let engine = Engine.create({
+    engine = Engine.create({
         enableSleeping: true
     }),
     world = engine.world;
 
-    let render = Render.create({
+    render = Render.create({
         element: document.body,
         engine: engine,
         options: {
@@ -99,13 +144,13 @@ Physics.sandbox = function() {
 
     Render.run(render);
     
-    let runner = Runner.create();
+    runner = Runner.create();
     Runner.run(runner, engine);
 
     let count = 0;
 
-    setInterval(() => {
-        if(count < ballSettings.ballCount){
+    timer = setInterval(() => {
+        if(run && count < ballSettings.ballCount) {
             let ball = createBall(Bodies, environment, ballSettings);
             Matter.Events.on(ball, "sleepStart", () => { Matter.Body.setStatic(ball, true) });
             World.add(engine.world, ball);
@@ -174,13 +219,19 @@ function createPegs(Bodies, environment, pegSettings) {
                     })
                 )
             }
-            if(pegSettings.shape == "polygon") {
+            else {
+                let numSides;
+                let shapeAngle = 0;
+                if(pegSettings.shape == "hexagon"){ numSides = 6 };
+                if(pegSettings.shape == "square"){ numSides = 4 };
+                if(pegSettings.shape == "triangle"){ numSides = 3; shapeAngle = 90*(Math.PI/180) };
                 pegs.push(
-                    Bodies.polygon(environment.centerX-pegSettings.colSpacing*((i)/2)+pegSettings.colSpacing*j, 200+i*pegSettings.rowSpacing,6,pegSettings.pegSize, {
+                    Bodies.polygon(environment.centerX-pegSettings.colSpacing*((i)/2)+pegSettings.colSpacing*j, 200+i*pegSettings.rowSpacing,numSides,pegSettings.pegSize, {
                         render: {
                             strokeStyle: '#ffffff',
                             lineWidth: 3
                         },
+                        angle: shapeAngle,
                         isStatic: true
                     })
                 )
@@ -191,11 +242,12 @@ function createPegs(Bodies, environment, pegSettings) {
 }
 
 function createDividers(Bodies, environment, dividerSettings) {
-    let dividers = [];
+    let dividers = [],
+    spacing = environment.centerX/dividerSettings.num*2;
 
     for(let i = 0; i < dividerSettings.num; i++){
         dividers.push(
-            Bodies.rectangle(environment.centerX-dividerSettings.spacing/2-dividerSettings.spacing*i,environment.height-100,dividerSettings.wallWidth,dividerSettings.wallHeight, {
+            Bodies.rectangle(environment.centerX-spacing/2-spacing*i,environment.height-100,dividerSettings.wallWidth,dividerSettings.wallHeight, {
                 render: {
                     fillStyle: color,
                     strokeStyle: 'C'
@@ -204,7 +256,7 @@ function createDividers(Bodies, environment, dividerSettings) {
             })
         );
         dividers.push(
-            Bodies.rectangle(environment.centerX+dividerSettings.spacing/2+dividerSettings.spacing*i,environment.height-100,dividerSettings.wallWidth,dividerSettings.wallHeight, {
+            Bodies.rectangle(environment.centerX+spacing/2+spacing*i,environment.height-100,dividerSettings.wallWidth,dividerSettings.wallHeight, {
                 render: {
                     fillStyle: color,
                     strokeStyle: 'C'
